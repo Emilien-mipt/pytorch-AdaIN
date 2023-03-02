@@ -30,6 +30,7 @@ parser.add_argument(
     "--alignment", action="store_true", help="default: no face alignment"
 )
 parser.add_argument("--size", type=int, default=512, help="face size nxn")
+parser.add_argument("--save_ratio", action="store_true", help="save the ratio while resizing")
 parser.add_argument("--g_beta", type=float, default=2.0, help="face size nxn")
 parser.add_argument(
     "--save_fl", action="store_true", help="default: do not save facial landmarks"
@@ -327,14 +328,42 @@ def crop_folder(path_to_folder):
         crop_face(img, file_name=name, rotate=rotate, size=size, quiet_mode=quiet)
 
 
-def resize_img(image, file_name=None, size=size):
+def resize_img(image, file_name=None, size=size, ratio=False):
     height, width, channels = image.shape  # cv2 image
-    print(height == width == 512)
     image = PIL_image_convert(image)
-    # Resize and save the face crop
+    # Resize and save
     path_to_output = os.path.join(args.output_dir, file_name)
-    image = image.resize((size, size))
-    image.save(path_to_output)
+    # Save ratio
+    if args.save_ratio:
+        if height > width:
+            baseheight = size
+            hpercent = (baseheight/float(image.size[1]))
+            wsize = int((float(image.size[0])*float(hpercent)))
+            image = image.resize((wsize, baseheight), Image.ANTIALIAS)          
+        else:
+            basewidth = size
+            wpercent = (basewidth/float(image.size[0]))
+            hsize = int((float(image.size[1])*float(wpercent)))
+            image = image.resize((basewidth, hsize), Image.ANTIALIAS)
+    else:
+        image = image.resize((size, size))
+    # Fill black regions with white if needed
+    new_width, new_height = image.size
+    if args.fill_black:
+        bg = Image.new(
+            "RGB",
+            (size, size),
+            (255, 255, 255),
+        )
+        if new_height > new_width:
+            diff = math.fabs(size - new_width)//2
+            bg.paste(image, (int(diff), 0))
+        else:
+            diff = math.fabs(size - new_height)//2
+            bg.paste(image, (0, int(diff)))
+        bg.save(path_to_output)
+    else:
+        image.save(path_to_output)
 
 
 def resize_folder(path_to_folder):
@@ -343,9 +372,28 @@ def resize_folder(path_to_folder):
         print(f"Processing the file {name}...")
         path_to_file = os.path.join(path_to_folder, name)
         img = cv2.imread(path_to_file)
-        resize_img(img, file_name=name, size=size)
+        resize_img(img, file_name=name, size=size, ratio=args.save_ratio)
+
+
+def divide_img(image, file_name=None):
+    height, width, channels = image.shape  # cv2 image
+    half = width//2
+    right_part = image[:, half:]  
+    path_to_output = os.path.join(args.output_dir, file_name)
+    cv2.imwrite(path_to_output, right_part)
+
+
+def divide_folder(path_to_folder):
+    list_names = os.listdir(path_to_folder)
+    for name in tqdm(list_names):
+        if ('r1' in name) or ('r2' in name) or ('r3' in name) or ('s1' in name) or ('s2' in name):
+            continue
+        print(f"Processing the file {name}...")
+        path_to_file = os.path.join(path_to_folder, name)
+        img = cv2.imread(path_to_file)
+        divide_img(img, file_name=name)
 
 
 if __name__ == "__main__":
     path_to_dir = args.input_dir
-    crop_folder(path_to_dir)
+    resize_folder(path_to_dir)

@@ -138,15 +138,26 @@ class Net(nn.Module):
     def forward(self, content, style, alpha=1.0):
         assert 0 <= alpha <= 1
         style_feats = self.encode_with_intermediate(style)
+        
+        # Content features
         content_feat = self.encode(content)
         t = adain(content_feat, style_feats[-1])
         t = alpha * t + (1 - alpha) * content_feat
-
         g_t = self.decoder(t)
         g_t_feats = self.encode_with_intermediate(g_t)
 
-        loss_c = self.calc_content_loss(g_t_feats[-1], t)
-        loss_s = self.calc_style_loss(g_t_feats[0], style_feats[0])
+        #Style features
+        style_embedding = self.encode(style) # f(s)
+        t_style = adain(style_embedding, style_feats[-1])
+        t_style = alpha * t_style + (1 - alpha) * style_embedding
+        g_t_style = self.decoder(t_style)
+
+        # Calculate losses
+        loss_content = self.calc_content_loss(g_t_feats[-1], t)
+        loss_consist = self.calc_content_loss(g_t_style, style)
+        loss_style = self.calc_style_loss(g_t_feats[0], style_feats[0])
+
         for i in range(1, 4):
-            loss_s += self.calc_style_loss(g_t_feats[i], style_feats[i])
-        return loss_c, loss_s
+            loss_style += self.calc_style_loss(g_t_feats[i], style_feats[i])
+
+        return loss_content, loss_style, loss_consist

@@ -45,7 +45,7 @@ def train_transform():
 
 def val_transform():
     transform_list = [
-        transforms.Resize(size=(512, 512)),
+        #transforms.Resize(size=(512, 512)),
         # transforms.RandomCrop(256),
         transforms.ToTensor(),
     ]
@@ -94,10 +94,16 @@ parser.add_argument(
     help="Directory path to a batch of validation content images",
 )
 parser.add_argument(
-    "--style_dir",
+    "--train_style_dir",
     type=str,
     required=True,
-    help="Directory path to a batch of style images",
+    help="Directory path to a batch of train style images",
+)
+parser.add_argument(
+    "--val_style_dir",
+    type=str,
+    required=True,
+    help="Directory path to a batch of val style images",
 )
 parser.add_argument("--vgg", type=str, default="models/vgg_normalised.pth")
 
@@ -112,6 +118,7 @@ parser.add_argument("--max_iter", type=int, default=160000)
 parser.add_argument("--batch_size", type=int, default=8)
 parser.add_argument("--style_weight", type=float, default=1.0)
 parser.add_argument("--content_weight", type=float, default=1.0)
+parser.add_argument("--consist_weight", type=float, default=1.0)
 parser.add_argument("--n_threads", type=int, default=16)
 parser.add_argument("--save_model_interval", type=int, default=10000)
 parser.add_argument("--loss_print_interval", type=int, default=100)
@@ -139,7 +146,8 @@ style_tf = train_transform()
 
 train_content_dataset = FlatFolderDataset(args.train_content_dir, train_content_tf)
 val_content_dataset = FlatFolderDataset(args.val_content_dir, val_content_tf)
-style_dataset = FlatFolderDataset(args.style_dir, style_tf)
+train_style_dataset = FlatFolderDataset(args.train_style_dir, style_tf)
+val_style_dataset = FlatFolderDataset(args.val_style_dir, style_tf)
 
 train_content_iter = iter(
     data.DataLoader(
@@ -158,11 +166,20 @@ val_content_iter = iter(
     )
 )
 
-style_iter = iter(
+train_style_iter = iter(
     data.DataLoader(
-        style_dataset,
+        train_style_dataset,
         batch_size=args.batch_size,
-        sampler=InfiniteSamplerWrapper(style_dataset),
+        sampler=InfiniteSamplerWrapper(train_style_dataset),
+        num_workers=args.n_threads,
+    )
+)
+
+val_style_iter = iter(
+    data.DataLoader(
+        val_style_dataset,
+        batch_size=args.batch_size,
+        sampler=InfiniteSamplerWrapper(val_style_dataset),
         num_workers=args.n_threads,
     )
 )
@@ -174,34 +191,41 @@ for i in tqdm(range(args.max_iter)):
     cur_lr = optimizer.param_groups[0]["lr"]
     writer.add_scalar("Learning rate", cur_lr, i + 1)
 
-    style_images = next(style_iter).to(device)
+    train_style_images = next(train_style_iter).to(device)
+    val_style_images = next(val_style_iter).to(device)
 
     # Train part
     network.train()
     train_content_images = next(train_content_iter).to(device)
-    train_loss_c, train_loss_s = network(train_content_images, style_images)
-    train_loss_c = args.content_weight * train_loss_c
-    train_loss_s = args.style_weight * train_loss_s
-    train_loss = train_loss_c + train_loss_s
+    train_loss_content, train_loss_style, train_loss_consist = network(train_content_images, train_style_images)
+    train_loss_content = args.content_weight * train_loss_content
+    train_loss_style = args.style_weight * train_loss_style
+    train_loss_consist = args.consist_weight * train_loss_consist
+    train_loss = train_loss_content + train_loss_style + train_loss_consist
 
     optimizer.zero_grad()
     train_loss.backward()
     optimizer.step()
 
-    writer.add_scalar("train loss_content", train_loss_c.item(), i + 1)
-    writer.add_scalar("train loss_style", train_loss_s.item(), i + 1)
+    writer.add_scalar("train loss_content", train_loss_content.item(), i + 1)
+    writer.add_scalar("train loss_style", train_loss_style.item(), i + 1)
+    writer.add_scalar("train loss_self-consist", train_loss_consist.item(), i + 1)
+    writer.add_scalar("train loss", train_loss.item(), i + 1)
 
     # Val part
     network.eval()
     with torch.no_grad():
         val_content_images = next(val_content_iter).to(device)
-        val_loss_c, val_loss_s = network(val_content_images, style_images)
-        val_loss_c = args.content_weight * val_loss_c
-        val_loss_s = args.style_weight * val_loss_s
-        val_loss = val_loss_c + val_loss_s
+        val_loss_content, val_loss_style, val_loss_consist = network(val_content_images, val_style_images)
+        val_loss_content = args.content_weight * val_loss_content
+        val_loss_style = args.style_weight * val_loss_style
+        val_loss_consist = args.consist_weight * val_loss_consist
+        val_loss = val_loss_content + val_loss_style + val_loss_consist
 
-    writer.add_scalar("val loss_content", val_loss_c.item(), i + 1)
-    writer.add_scalar("val loss_style", val_loss_s.item(), i + 1)
+    writer.add_scalar("val loss_content", val_loss_content.item(), i + 1)
+    writer.add_scalar("val loss_style", val_loss_style.item(), i + 1)
+    writer.add_scalar("val loss_self-consist", val_loss_consist.item(), i + 1)
+    writer.add_scalar("val loss", val_loss.item(), i + 1)
 
     if (i + 1) % args.loss_print_interval == 0:
         print(
