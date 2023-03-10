@@ -45,7 +45,7 @@ def train_transform():
 
 def val_transform():
     transform_list = [
-        #transforms.Resize(size=(512, 512)),
+        transforms.Resize(size=(512, 512)),
         # transforms.RandomCrop(256),
         transforms.ToTensor(),
     ]

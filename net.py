@@ -148,9 +148,7 @@ class Net(nn.Module):
 
         #Style features
         style_embedding = self.encode(style) # f(s)
-        t_style = adain(style_embedding, style_feats[-1])
-        t_style = alpha * t_style + (1 - alpha) * style_embedding
-        g_t_style = self.decoder(t_style)
+        g_t_style = self.decoder(style_embedding) # g(f(s))
 
         # Calculate losses
         loss_content = self.calc_content_loss(g_t_feats[-1], t)
