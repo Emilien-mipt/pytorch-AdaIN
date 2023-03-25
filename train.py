@@ -78,7 +78,6 @@ def adjust_learning_rate(optimizer, iteration_count):
     for param_group in optimizer.param_groups:
         param_group["lr"] = lr
 
-
 parser = argparse.ArgumentParser()
 # Basic options
 parser.add_argument(
@@ -106,7 +105,6 @@ parser.add_argument(
     help="Directory path to a batch of val style images",
 )
 parser.add_argument("--vgg", type=str, default="models/vgg_normalised.pth")
-
 # training options
 parser.add_argument(
     "--save_dir", default="./experiments", help="Directory to save the model"
@@ -119,11 +117,11 @@ parser.add_argument("--batch_size", type=int, default=8)
 parser.add_argument("--style_weight", type=float, default=1.0)
 parser.add_argument("--content_weight", type=float, default=1.0)
 parser.add_argument("--consist_weight", type=float, default=1.0)
-parser.add_argument("--n_threads", type=int, default=16)
+parser.add_argument("--sparse_weight", type=float, default=1.0)
+parser.add_argument("--n_threads", type=int, default=8)
 parser.add_argument("--save_model_interval", type=int, default=10000)
 parser.add_argument("--loss_print_interval", type=int, default=100)
 args = parser.parse_args()
-
 seed_everything()
 device = torch.device("cuda")
 save_dir = Path(args.save_dir)
@@ -131,19 +129,15 @@ save_dir.mkdir(exist_ok=True, parents=True)
 log_dir = Path(args.log_dir)
 log_dir.mkdir(exist_ok=True, parents=True)
 writer = SummaryWriter(log_dir=str(log_dir))
-
 decoder = net.decoder
 vgg = net.vgg
-
 vgg.load_state_dict(torch.load(args.vgg))
 vgg = nn.Sequential(*list(vgg.children())[:31])
 network = net.Net(vgg, decoder)
 network.to(device)
-
 train_content_tf = train_transform()
 val_content_tf = val_transform()
 style_tf = train_transform()
-
 train_content_dataset = FlatFolderDataset(args.train_content_dir, train_content_tf)
 val_content_dataset = FlatFolderDataset(args.val_content_dir, val_content_tf)
 train_style_dataset = FlatFolderDataset(args.train_style_dir, style_tf)
@@ -173,7 +167,7 @@ train_style_iter = iter(
         sampler=InfiniteSamplerWrapper(train_style_dataset),
         num_workers=args.n_threads,
     )
-)
+)   
 
 val_style_iter = iter(
     data.DataLoader(
@@ -197,11 +191,12 @@ for i in tqdm(range(args.max_iter)):
     # Train part
     network.train()
     train_content_images = next(train_content_iter).to(device)
-    train_loss_content, train_loss_style, train_loss_consist = network(train_content_images, train_style_images)
+    train_loss_content, train_loss_style, train_loss_consist, train_loss_sparse = network(train_content_images, train_style_images)
     train_loss_content = args.content_weight * train_loss_content
     train_loss_style = args.style_weight * train_loss_style
     train_loss_consist = args.consist_weight * train_loss_consist
-    train_loss = train_loss_content + train_loss_style + train_loss_consist
+    train_loss_sparse = args.sparse_weight * train_loss_sparse
+    train_loss = train_loss_content + train_loss_style + train_loss_consist + train_loss_sparse
 
     optimizer.zero_grad()
     train_loss.backward()
@@ -210,21 +205,24 @@ for i in tqdm(range(args.max_iter)):
     writer.add_scalar("train loss_content", train_loss_content.item(), i + 1)
     writer.add_scalar("train loss_style", train_loss_style.item(), i + 1)
     writer.add_scalar("train loss_self-consist", train_loss_consist.item(), i + 1)
+    writer.add_scalar("train loss_sparse", train_loss_sparse.item(), i + 1)
     writer.add_scalar("train loss", train_loss.item(), i + 1)
 
     # Val part
     network.eval()
     with torch.no_grad():
         val_content_images = next(val_content_iter).to(device)
-        val_loss_content, val_loss_style, val_loss_consist = network(val_content_images, val_style_images)
+        val_loss_content, val_loss_style, val_loss_consist, val_loss_sparse = network(val_content_images, val_style_images)
         val_loss_content = args.content_weight * val_loss_content
         val_loss_style = args.style_weight * val_loss_style
         val_loss_consist = args.consist_weight * val_loss_consist
-        val_loss = val_loss_content + val_loss_style + val_loss_consist
+        val_loss_sparse = args.sparse_weight * val_loss_sparse
+        val_loss = val_loss_content + val_loss_style + val_loss_consist + val_loss_sparse
 
     writer.add_scalar("val loss_content", val_loss_content.item(), i + 1)
     writer.add_scalar("val loss_style", val_loss_style.item(), i + 1)
     writer.add_scalar("val loss_self-consist", val_loss_consist.item(), i + 1)
+    writer.add_scalar("val loss_sparse", val_loss_sparse.item(), i + 1)
     writer.add_scalar("val loss", val_loss.item(), i + 1)
 
     if (i + 1) % args.loss_print_interval == 0:

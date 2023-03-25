@@ -2,6 +2,7 @@ import torch.nn as nn
 
 from function import adaptive_instance_normalization as adain
 from function import calc_mean_std
+from sparsity_mask import create_sparsity
 
 decoder = nn.Sequential(
     nn.ReflectionPad2d((1, 1, 1, 1)),
@@ -102,6 +103,7 @@ class Net(nn.Module):
         self.enc_4 = nn.Sequential(*enc_layers[18:31])  # relu3_1 -> relu4_1
         self.decoder = decoder
         self.mse_loss = nn.MSELoss()
+        self.mae_loss = nn.L1Loss()
 
         # fix the encoder
         for name in ['enc_1', 'enc_2', 'enc_3', 'enc_4']:
@@ -134,6 +136,11 @@ class Net(nn.Module):
         target_mean, target_std = calc_mean_std(target)
         return self.mse_loss(input_mean, target_mean) + \
                self.mse_loss(input_std, target_std)
+    
+    def calc_sparce_loss(self, input, target):
+        assert (input.size() == target.size())
+        assert (target.requires_grad is False)
+        return self.mae_loss(input - target)
 
     def forward(self, content, style, alpha=1.0):
         assert 0 <= alpha <= 1
@@ -150,12 +157,16 @@ class Net(nn.Module):
         style_embedding = self.encode(style) # f(s)
         g_t_style = self.decoder(style_embedding) # g(f(s))
 
+        # Sparcity mask
+        sparcity_mask = create_sparsity(g_t, cp='sparsity_mask_model.pth')
+
         # Calculate losses
         loss_content = self.calc_content_loss(g_t_feats[-1], t)
         loss_consist = self.calc_content_loss(g_t_style, style)
         loss_style = self.calc_style_loss(g_t_feats[0], style_feats[0])
+        loss_sparce = self.calc_sparce_loss(sparcity_mask, content)
 
         for i in range(1, 4):
             loss_style += self.calc_style_loss(g_t_feats[i], style_feats[i])
 
-        return loss_content, loss_style, loss_consist
+        return loss_content, loss_style, loss_consist, loss_sparce
