@@ -140,7 +140,11 @@ class Net(nn.Module):
     def calc_sparce_loss(self, input, target):
         assert (input.size() == target.size())
         assert (target.requires_grad is False)
-        return self.mae_loss(input - target)
+        target_mask = [[0 for j in range(512)] for i in range(512)]
+        for i in range(len(target)):
+            for j in range(len(target)):
+                target_mask[i][j] = input[i][j] * target[i][j]
+        return self.mae_loss(input - target_mask)
 
     def forward(self, content, style, alpha=1.0):
         assert 0 <= alpha <= 1
@@ -158,13 +162,13 @@ class Net(nn.Module):
         g_t_style = self.decoder(style_embedding) # g(f(s))
 
         # Sparcity mask
-        sparcity_mask = create_sparsity(g_t, cp='sparsity_mask_model.pth')
+        sparcity_mask = create_sparsity(content, cp='sparsity_mask_model.pth')
 
         # Calculate losses
         loss_content = self.calc_content_loss(g_t_feats[-1], t)
         loss_consist = self.calc_content_loss(g_t_style, style)
         loss_style = self.calc_style_loss(g_t_feats[0], style_feats[0])
-        loss_sparce = self.calc_sparce_loss(sparcity_mask, content)
+        loss_sparce = self.calc_sparce_loss(sparcity_mask, g_t)
 
         for i in range(1, 4):
             loss_style += self.calc_style_loss(g_t_feats[i], style_feats[i])
