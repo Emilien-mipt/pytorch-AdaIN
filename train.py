@@ -51,6 +51,14 @@ def val_transform():
     ]
     return transforms.Compose(transform_list)
 
+def masks_transform():
+    transform_list = [
+        transforms.Resize(size=(512, 512)),
+        # transforms.RandomCrop(256),
+        transforms.ToTensor(),
+    ]
+    return transforms.Compose(transform_list)
+
 
 class FlatFolderDataset(data.Dataset):
     def __init__(self, root, transform):
@@ -104,6 +112,18 @@ parser.add_argument(
     required=True,
     help="Directory path to a batch of val style images",
 )
+parser.add_argument(
+    "--train_sparsity_masks_dir",
+    type=str,
+    required=True,
+    help="Directory path to a batch of train sparsity masks images",
+)
+parser.add_argument(
+    "--val_sparsity_masks_dir",
+    type=str,
+    required=True,
+    help="Directory path to a batch of val sparsity masks images",
+)
 parser.add_argument("--vgg", type=str, default="models/vgg_normalised.pth")
 # training options
 parser.add_argument(
@@ -138,10 +158,14 @@ network.to(device)
 train_content_tf = train_transform()
 val_content_tf = val_transform()
 style_tf = train_transform()
+train_masks_tf = masks_transform()
+val_masks_tf = masks_transform()
 train_content_dataset = FlatFolderDataset(args.train_content_dir, train_content_tf)
 val_content_dataset = FlatFolderDataset(args.val_content_dir, val_content_tf)
 train_style_dataset = FlatFolderDataset(args.train_style_dir, style_tf)
 val_style_dataset = FlatFolderDataset(args.val_style_dir, style_tf)
+train_masks_dataset = FlatFolderDataset(args.train_sparsity_masks_dir, train_masks_tf)
+val_masks_dataset = FlatFolderDataset(args.val_sparsity_masks_dir, train_masks_tf)
 
 train_content_iter = iter(
     data.DataLoader(
@@ -178,6 +202,23 @@ val_style_iter = iter(
     )
 )
 
+train_masks_iter = iter(
+    data.DataLoader(
+        train_masks_dataset,
+        batch_size=args.batch_size,
+        sampler=InfiniteSamplerWrapper(train_masks_dataset),
+        num_workers=args.n_threads,
+    )
+)
+val_masks_iter = iter(
+    data.DataLoader(
+        val_masks_dataset,
+        batch_size=args.batch_size,
+        sampler=InfiniteSamplerWrapper(val_masks_dataset),
+        num_workers=args.n_threads,
+    )
+)
+
 optimizer = torch.optim.Adam(network.decoder.parameters(), lr=args.lr)
 
 for i in tqdm(range(args.max_iter)):
@@ -191,7 +232,8 @@ for i in tqdm(range(args.max_iter)):
     # Train part
     network.train()
     train_content_images = next(train_content_iter).to(device)
-    train_loss_content, train_loss_style, train_loss_consist, train_loss_sparse = network(train_content_images, train_style_images)
+    train_mask_images = next(train_masks_iter).to(device)
+    train_loss_content, train_loss_style, train_loss_consist, train_loss_sparse = network(train_content_images, train_style_images, train_mask_images)
     train_loss_content = args.content_weight * train_loss_content
     train_loss_style = args.style_weight * train_loss_style
     train_loss_consist = args.consist_weight * train_loss_consist
@@ -212,7 +254,8 @@ for i in tqdm(range(args.max_iter)):
     network.eval()
     with torch.no_grad():
         val_content_images = next(val_content_iter).to(device)
-        val_loss_content, val_loss_style, val_loss_consist, val_loss_sparse = network(val_content_images, val_style_images)
+        val_mask_images = next(val_masks_iter).to(device)
+        val_loss_content, val_loss_style, val_loss_consist, val_loss_sparse = network(val_content_images, val_style_images, val_mask_images)
         val_loss_content = args.content_weight * val_loss_content
         val_loss_style = args.style_weight * val_loss_style
         val_loss_consist = args.consist_weight * val_loss_consist
