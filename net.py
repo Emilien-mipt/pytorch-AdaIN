@@ -101,7 +101,6 @@ class Net(nn.Module):
         self.enc_3 = nn.Sequential(*enc_layers[11:18])  # relu2_1 -> relu3_1
         self.enc_4 = nn.Sequential(*enc_layers[18:31])  # relu3_1 -> relu4_1
         self.decoder = decoder
-        self.mask = sparse_mask
         self.mse_loss = nn.MSELoss()
         self.mae_loss = nn.L1Loss()
 
