@@ -139,8 +139,7 @@ class Net(nn.Module):
     def calc_sparce_loss(self, input, target):
         assert (input.size() == target.size())
         assert (target.requires_grad is False)
-        for i in range(len(target)):
-            target[i] = input[i] * target[i]
+        target *= input
         return self.mae_loss(input - target)
 
     def forward(self, content, style, sparse_mask=[], alpha=1.0):
