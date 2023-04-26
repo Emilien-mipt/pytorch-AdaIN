@@ -136,11 +136,15 @@ class Net(nn.Module):
         return self.mse_loss(input_mean, target_mean) + \
                self.mse_loss(input_std, target_std)
     
-    def calc_sparce_loss(self, input, target):
-        assert (input.size() == target.size())
-        assert (target.requires_grad is False)
-        target *= input
-        return self.mae_loss(input - target)
+    def calc_sparse_loss(self, mask, target):
+        '''
+        input = mask
+        target = g(t)
+        '''
+        assert (mask.size() == target.size())
+        # assert (target.requires_grad is False)
+        TM = mask * target
+        return self.mae_loss(mask, TM)
 
     def forward(self, content, style, sparse_mask=[], alpha=1.0):
         assert 0 <= alpha <= 1
@@ -153,7 +157,7 @@ class Net(nn.Module):
         g_t = self.decoder(t)
         g_t_feats = self.encode_with_intermediate(g_t)
 
-        #Style features
+        # Style features
         style_embedding = self.encode(style) # f(s)
         g_t_style = self.decoder(style_embedding) # g(f(s))
 
@@ -161,9 +165,9 @@ class Net(nn.Module):
         loss_content = self.calc_content_loss(g_t_feats[-1], t)
         loss_consist = self.calc_content_loss(g_t_style, style)
         loss_style = self.calc_style_loss(g_t_feats[0], style_feats[0])
-        loss_sparce = self.calc_sparce_loss(sparse_mask, g_t)
+        loss_sparse = self.calc_sparse_loss(sparse_mask, g_t)
 
         for i in range(1, 4):
             loss_style += self.calc_style_loss(g_t_feats[i], style_feats[i])
 
-        return loss_content, loss_style, loss_consist, loss_sparce
+        return loss_content, loss_style, loss_consist, loss_sparse
