@@ -1,6 +1,7 @@
 *.pth
 *.t7
 output/*
+input/*
 .idea
 experiments/*
 logs/*
@@ -9,3 +10,4 @@ __pycache__/
 data/
 input/style/
 input/content/
+input/people_photo/
