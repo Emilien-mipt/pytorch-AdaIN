@@ -165,7 +165,7 @@ val_content_dataset = FlatFolderDataset(args.val_content_dir, val_content_tf)
 train_style_dataset = FlatFolderDataset(args.train_style_dir, style_tf)
 val_style_dataset = FlatFolderDataset(args.val_style_dir, style_tf)
 train_masks_dataset = FlatFolderDataset(args.train_sparsity_masks_dir, train_masks_tf)
-val_masks_dataset = FlatFolderDataset(args.val_sparsity_masks_dir, train_masks_tf)
+val_masks_dataset = FlatFolderDataset(args.val_sparsity_masks_dir, val_masks_tf)
 
 train_content_iter = iter(
     data.DataLoader(

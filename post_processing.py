@@ -4,6 +4,8 @@ import os
 import cv2
 from tqdm import tqdm
 
+from pathlib import Path
+
 parser = argparse.ArgumentParser(description="Post processing")
 
 parser.add_argument("-i", "--input_path", type=str, default="./output/model_output")
@@ -15,6 +17,9 @@ args = parser.parse_args()
 
 input = args.input_path
 output = args.output_path
+
+output_dir = Path(args.output_path)
+output_dir.mkdir(exist_ok=True, parents=True)
 
 
 def binarize_image(input_path, output_path, file_name=None):

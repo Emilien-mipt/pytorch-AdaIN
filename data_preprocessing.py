@@ -8,17 +8,19 @@ return the aligend face images of each video
 import argparse
 import math
 import os
-import time
-
+from pathlib import Path
+import albumentations as albu
 import cv2
 import numpy as np
-import pandas
 import torch
 from facenet_pytorch import MTCNN
+from iglovikov_helper_functions.dl.pytorch.utils import tensor_from_rgb_image
+from iglovikov_helper_functions.utils.image_utils import load_rgb, pad, unpad
+from people_segmentation.pre_trained_models import create_model
 from PIL import Image
 from tqdm import tqdm
 
-parser = argparse.ArgumentParser(description="MTCNN video face preprocessing")
+parser = argparse.ArgumentParser(description="Some modules for image processing.")
 parser.add_argument("-i", "--input_dir", type=str, default="./data/content_dir")
 parser.add_argument(
     "-o", "--output_dir", type=str, default="./data/content_dir_processed/"
@@ -30,7 +32,9 @@ parser.add_argument(
     "--alignment", action="store_true", help="default: no face alignment"
 )
 parser.add_argument("--size", type=int, default=512, help="face size nxn")
-parser.add_argument("--save_ratio", action="store_true", help="save the ratio while resizing")
+parser.add_argument(
+    "--save_ratio", action="store_true", help="save the ratio while resizing"
+)
 parser.add_argument("--g_beta", type=float, default=2.0, help="face size nxn")
 parser.add_argument(
     "--save_fl", action="store_true", help="default: do not save facial landmarks"
@@ -47,6 +51,7 @@ parser.add_argument(
     help="whether to output face detection results",
 )
 parser.add_argument("--gpu_id", type=int, default=0, help="Choose gpu id for inference")
+parser.add_argument("--mode", type=str,  help="Choose mode for processing")
 args = parser.parse_args()
 
 gpu_id = args.gpu_id
@@ -59,8 +64,11 @@ device = torch.device(f"cuda:{gpu_id}" if torch.cuda.is_available() else "cpu")
 
 detector = MTCNN(select_largest=False, device=device)
 
+output_dir = Path(args.output_dir)
+output_dir.mkdir(exist_ok=True, parents=True)
 
-def image_rote(img, angle, elx, ely, erx, ery, mlx, mly, mrx, mry, expand=1):
+
+def image_rotate(img, angle, elx, ely, erx, ery, mlx, mly, mrx, mry, expand=1):
     w, h = img.size
     img = img.rotate(angle, expand=expand)  # whether to expand after rotation
     if expand == 0:
@@ -202,7 +210,7 @@ def crop_face(
 
     if rotate:
         angle = calculate_angle(lex, ley, rex, rey)
-        image, lex, ley, rex, rey, lmx, lmy, rmx, rmy = image_rote(
+        image, lex, ley, rex, rey, lmx, lmy, rmx, rmy = image_rotate(
             image, angle, lex, ley, rex, rey, lmx, lmy, rmx, rmy
         )
     eye_width = rex - lex  # distance between two eyes
@@ -337,13 +345,13 @@ def resize_img(image, file_name=None, size=size, ratio=False):
     if args.save_ratio:
         if height > width:
             baseheight = size
-            hpercent = (baseheight/float(image.size[1]))
-            wsize = int((float(image.size[0])*float(hpercent)))
-            image = image.resize((wsize, baseheight), Image.ANTIALIAS)          
+            hpercent = baseheight / float(image.size[1])
+            wsize = int((float(image.size[0]) * float(hpercent)))
+            image = image.resize((wsize, baseheight), Image.ANTIALIAS)
         else:
             basewidth = size
-            wpercent = (basewidth/float(image.size[0]))
-            hsize = int((float(image.size[1])*float(wpercent)))
+            wpercent = basewidth / float(image.size[0])
+            hsize = int((float(image.size[1]) * float(wpercent)))
             image = image.resize((basewidth, hsize), Image.ANTIALIAS)
     else:
         image = image.resize((size, size))
@@ -356,10 +364,10 @@ def resize_img(image, file_name=None, size=size, ratio=False):
             (255, 255, 255),
         )
         if new_height > new_width:
-            diff = math.fabs(size - new_width)//2
+            diff = math.fabs(size - new_width) // 2
             bg.paste(image, (int(diff), 0))
         else:
-            diff = math.fabs(size - new_height)//2
+            diff = math.fabs(size - new_height) // 2
             bg.paste(image, (0, int(diff)))
         bg.save(path_to_output)
     else:
@@ -377,8 +385,8 @@ def resize_folder(path_to_folder):
 
 def divide_img(image, file_name=None):
     height, width, channels = image.shape  # cv2 image
-    half = width//2
-    right_part = image[:, half:]  
+    half = width // 2
+    right_part = image[:, half:]
     path_to_output = os.path.join(args.output_dir, file_name)
     cv2.imwrite(path_to_output, right_part)
 
@@ -386,7 +394,13 @@ def divide_img(image, file_name=None):
 def divide_folder(path_to_folder):
     list_names = os.listdir(path_to_folder)
     for name in tqdm(list_names):
-        if ('r1' in name) or ('r2' in name) or ('r3' in name) or ('s1' in name) or ('s2' in name):
+        if (
+            ("r1" in name)
+            or ("r2" in name)
+            or ("r3" in name)
+            or ("s1" in name)
+            or ("s2" in name)
+        ):
             continue
         print(f"Processing the file {name}...")
         path_to_file = os.path.join(path_to_folder, name)
@@ -394,6 +408,48 @@ def divide_folder(path_to_folder):
         divide_img(img, file_name=name)
 
 
+def delete_bg_img(image, segmentation_model, file_name=None):
+    image = load_rgb(image)
+    transform = albu.Compose([albu.Normalize(p=1)], p=1)
+    padded_image, pads = pad(image, factor=32, border=cv2.BORDER_CONSTANT)
+    x = transform(image=padded_image)["image"]
+    x = torch.unsqueeze(tensor_from_rgb_image(x), 0)
+    with torch.no_grad():
+        prediction = segmentation_model(x)[0][0]
+    mask = (prediction <= 0).cpu().numpy().astype(np.uint8)
+    mask = unpad(mask, pads)
+    image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+    dst = cv2.addWeighted(
+        image,
+        1,
+        (cv2.cvtColor(mask, cv2.COLOR_GRAY2RGB) * (255, 255, 255)).astype(np.uint8),
+        1.0,
+        0,
+    )
+    path_to_output = os.path.join(args.output_dir, file_name)
+    cv2.imwrite(path_to_output, dst)
+
+
+def delete_bg_folder(path_to_folder):
+    model = create_model("Unet_2020-07-20")
+    model.eval()
+    list_names = os.listdir(path_to_folder)
+    for name in tqdm(list_names):
+        print(f"Processing the file {name}...")
+        path_to_file = os.path.join(path_to_folder, name)
+        delete_bg_img(path_to_file, model, name)
+
+
 if __name__ == "__main__":
+    mode = args.mode
     path_to_dir = args.input_dir
-    resize_folder(path_to_dir)
+    if mode == "crop":
+        crop_folder(path_to_dir)
+    elif mode == "resize":
+        resize_folder(path_to_dir)
+    elif mode == "divide":
+        divide_folder(path_to_dir)
+    elif mode == "delete_bg":
+        delete_bg_folder(path_to_dir)
+    else:
+        raise ValueError("No such mode! The following modes are available: crop, resize, divide and delete_bg.")
