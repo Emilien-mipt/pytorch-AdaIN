@@ -5,7 +5,5 @@ output/*
 experiments/*
 logs/*
 __pycache__/
-# data
-data/
 input/style/
 input/content/
