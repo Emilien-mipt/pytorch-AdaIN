@@ -49,15 +49,15 @@ def set_realesrgan():
                         category=RuntimeWarning)
     return upsampler
 
-def codeformer_folder(path_to_folder):
+def codeformer_folder(path_to_folder, output_path=''):
     list_names = os.listdir(path_to_folder)
     for name in tqdm(list_names):
         print(f"Processing the file {name}...")
         path_to_file = os.path.join(path_to_folder, name)
-        path = codeformer(path_to_file)
-        print(f"Complete {path}...")
+        path = codeformer(path_to_file, output_path)
+        print(f"Complete the file {name}.")
 
-def codeformer(img_path):
+def codeformer(img_path, output_path=''):
     # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     device = get_device()
     parser = argparse.ArgumentParser()
@@ -87,6 +87,8 @@ def codeformer(img_path):
 
     # ------------------------ input & output ------------------------
     w = args.fidelity_weight
+    if output_path != '':
+        args.output_path = output_path
     result_name = ''
     input_video = False
     if args.input_path.endswith(('jpg', 'jpeg', 'png', 'JPG', 'JPEG', 'PNG')): # input single img path
