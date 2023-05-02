@@ -3,6 +3,7 @@ import cv2
 import argparse
 import glob
 import torch
+from tqdm import tqdm
 from torchvision.transforms.functional import normalize
 from basicsr.utils import imwrite, img2tensor, tensor2img
 from basicsr.utils.download_util import load_file_from_url
@@ -47,6 +48,14 @@ def set_realesrgan():
                         'If you want to disable it, please remove `--bg_upsampler` and `--face_upsample` in command.',
                         category=RuntimeWarning)
     return upsampler
+
+def codeformer_folder(path_to_folder):
+    list_names = os.listdir(path_to_folder)
+    for name in tqdm(list_names):
+        print(f"Processing the file {name}...")
+        path_to_file = os.path.join(path_to_folder, name)
+        path = codeformer(path_to_file)
+        print(f"Complete {path}...")
 
 def codeformer(img_path):
     # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
