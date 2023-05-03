@@ -1,6 +1,7 @@
 *.pth
 *.t7
 output/*
+input/*
 .idea
 experiments/*
 logs/*
