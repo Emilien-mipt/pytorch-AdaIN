@@ -6,8 +6,6 @@ import torch.nn as nn
 from PIL import Image
 from torchvision import transforms
 from torchvision.utils import save_image
-from inference_codeformer import codeformer
-import cv2
 
 import net
 from function import adaptive_instance_normalization, coral
@@ -46,13 +44,13 @@ parser = argparse.ArgumentParser()
 # Basic options
 parser.add_argument('--content', type=str,
                     help='File path to the content image')
-parser.add_argument('--content_dir', type=str, default='input/content/',
+parser.add_argument('--content_dir', type=str,
                     help='Directory path to a batch of content images')
 parser.add_argument('--style', type=str,
                     help='File path to the style image, or multiple style \
                     images separated by commas if you want to do style \
                     interpolation or spatial control')
-parser.add_argument('--style_dir', type=str, default='input/style',
+parser.add_argument('--style_dir', type=str,
                     help='Directory path to a batch of style images')
 parser.add_argument('--vgg', type=str, default='models/vgg_normalised.pth')
 parser.add_argument('--decoder', type=str, default='models/decoder.pth')
@@ -136,9 +134,6 @@ for content_path in content_paths:
         content = content_tf(Image.open(str(content_path))) \
             .unsqueeze(0).expand_as(style)
         style = style.to(device)
-        codef_file = codeformer(str(content_path))
-        content = content_tf(Image.open(codef_file)) \
-            .unsqueeze(0).expand_as(style)
         content = content.to(device)
         with torch.no_grad():
             output = style_transfer(vgg, decoder, content, style,
@@ -150,8 +145,7 @@ for content_path in content_paths:
 
     else:  # process one content and one style
         for style_path in style_paths:
-            codef_file = codeformer(str(content_path))
-            content = content_tf(Image.open(codef_file))
+            content = content_tf(Image.open(str(content_path)))
             style = style_tf(Image.open(str(style_path)))
             if args.preserve_color:
                 style = coral(style, content)
