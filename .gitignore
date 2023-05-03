@@ -6,8 +6,6 @@ input/*
 experiments/*
 logs/*
 __pycache__/
-# data
-data/
-input/style/
-input/content/
-input/people_photo/
+input/*
+data/*
+models/*
