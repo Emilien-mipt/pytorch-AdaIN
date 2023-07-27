@@ -35,7 +35,6 @@ def main(args: argparse.Namespace):
         )
     print("Face crop is ready!")
 
-
     print("Removing the background...")
     if config.delete_bg.apply:
         subprocess.run(

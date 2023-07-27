@@ -1,10 +1,9 @@
 import argparse
 import os
+from pathlib import Path
 
 import cv2
 from tqdm import tqdm
-
-from pathlib import Path
 
 parser = argparse.ArgumentParser(description="Post processing")
 

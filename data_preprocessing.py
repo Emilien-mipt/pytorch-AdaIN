@@ -9,6 +9,7 @@ import argparse
 import math
 import os
 from pathlib import Path
+
 import albumentations as albu
 import cv2
 import numpy as np
@@ -51,7 +52,7 @@ parser.add_argument(
     help="whether to output face detection results",
 )
 parser.add_argument("--gpu_id", type=int, default=0, help="Choose gpu id for inference")
-parser.add_argument("--mode", type=str,  help="Choose mode for processing")
+parser.add_argument("--mode", type=str, help="Choose mode for processing")
 args = parser.parse_args()
 
 gpu_id = args.gpu_id
@@ -452,4 +453,6 @@ if __name__ == "__main__":
     elif mode == "delete_bg":
         delete_bg_folder(path_to_dir)
     else:
-        raise ValueError("No such mode! The following modes are available: crop, resize, divide and delete_bg.")
+        raise ValueError(
+            "No such mode! The following modes are available: crop, resize, divide and delete_bg."
+        )

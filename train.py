@@ -51,6 +51,7 @@ def val_transform():
     ]
     return transforms.Compose(transform_list)
 
+
 def masks_transform():
     transform_list = [
         transforms.Resize(size=(512, 512)),
@@ -85,6 +86,7 @@ def adjust_learning_rate(optimizer, iteration_count):
     lr = args.lr / (1.0 + args.lr_decay * iteration_count)
     for param_group in optimizer.param_groups:
         param_group["lr"] = lr
+
 
 parser = argparse.ArgumentParser()
 # Basic options
@@ -191,7 +193,7 @@ train_style_iter = iter(
         sampler=InfiniteSamplerWrapper(train_style_dataset),
         num_workers=args.n_threads,
     )
-)   
+)
 
 val_style_iter = iter(
     data.DataLoader(
@@ -233,12 +235,19 @@ for i in tqdm(range(args.max_iter)):
     network.train()
     train_content_images = next(train_content_iter).to(device)
     train_mask_images = next(train_masks_iter).to(device)
-    train_loss_content, train_loss_style, train_loss_consist, train_loss_sparse = network(train_content_images, train_style_images, train_mask_images)
+    (
+        train_loss_content,
+        train_loss_style,
+        train_loss_consist,
+        train_loss_sparse,
+    ) = network(train_content_images, train_style_images, train_mask_images)
     train_loss_content = args.content_weight * train_loss_content
     train_loss_style = args.style_weight * train_loss_style
     train_loss_consist = args.consist_weight * train_loss_consist
     train_loss_sparse = args.sparse_weight * train_loss_sparse
-    train_loss = train_loss_content + train_loss_style + train_loss_consist + train_loss_sparse
+    train_loss = (
+        train_loss_content + train_loss_style + train_loss_consist + train_loss_sparse
+    )
 
     optimizer.zero_grad()
     train_loss.backward()
@@ -255,12 +264,16 @@ for i in tqdm(range(args.max_iter)):
     with torch.no_grad():
         val_content_images = next(val_content_iter).to(device)
         val_mask_images = next(val_masks_iter).to(device)
-        val_loss_content, val_loss_style, val_loss_consist, val_loss_sparse = network(val_content_images, val_style_images, val_mask_images)
+        val_loss_content, val_loss_style, val_loss_consist, val_loss_sparse = network(
+            val_content_images, val_style_images, val_mask_images
+        )
         val_loss_content = args.content_weight * val_loss_content
         val_loss_style = args.style_weight * val_loss_style
         val_loss_consist = args.consist_weight * val_loss_consist
         val_loss_sparse = args.sparse_weight * val_loss_sparse
-        val_loss = val_loss_content + val_loss_style + val_loss_consist + val_loss_sparse
+        val_loss = (
+            val_loss_content + val_loss_style + val_loss_consist + val_loss_sparse
+        )
 
     writer.add_scalar("val loss_content", val_loss_content.item(), i + 1)
     writer.add_scalar("val loss_style", val_loss_style.item(), i + 1)

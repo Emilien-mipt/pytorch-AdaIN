@@ -295,4 +295,3 @@ if __name__ == "__main__":
     path_to_dir = args.input_path
     path_to_res = args.output_path
     codeformer_folder(path_to_dir, path_to_res)
-
