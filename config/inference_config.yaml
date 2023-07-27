@@ -1,0 +1,25 @@
+crop:
+  apply: True
+  input: "input/people_photo_single"
+  output: "output/tmp"
+  crop_size: 1024
+  g_beta: 5.0
+
+delete_bg:
+  apply: True
+  input: "output/tmp"
+  output: "output/tmp"
+
+superres:
+  apply: True
+  input: "output/tmp"
+  output: "output/tmp"
+  upscale: 2
+
+adain:
+  content_dir: 'output/tmp'
+  style: 'data/style/train_style/1.jpg'
+  decoder: './experiments/experiment2_without-background_with-sparse/decoder_iter_160000.pth.tar'
+  content_size: 1024
+  style_size: 512
+  output: "output/test"

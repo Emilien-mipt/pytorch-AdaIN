@@ -1,11 +1,10 @@
 *.pth
 *.t7
-output/*
 input/*
+output/*
 .idea
 experiments/*
 logs/*
 __pycache__/
-input/*
 data/*
 models/*
